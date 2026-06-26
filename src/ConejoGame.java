@@ -1,8 +1,12 @@
 import java.awt.*;
 import java.awt.event.*;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Random;
+import javax.imageio.ImageIO;
 import javax.swing.*;
 
 public class ConejoGame extends JPanel implements ActionListener, KeyListener {
@@ -10,32 +14,51 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
     private static final int ALTURA = 640;
     private static final int CHAO_Y = 535;
 
-    private static final int COELHO_X = 65;
-    private static final int COELHO_LARGURA = 48;
-    private static final int COELHO_ALTURA = 58;
+    private static final int COELHO_X = 118;
+    private static final int COELHO_LARGURA = 78;
+    private static final int COELHO_ALTURA = 110;
+
+    private static final int RAPOSA_LARGURA = 82;
+    private static final int RAPOSA_ALTURA = 99;
+
+    private static final int TRONCO_LARGURA = 88;
+    private static final int TRONCO_ALTURA = 45;
+
+    private static final int CENOURA_LARGURA = 30;
+    private static final int CENOURA_ALTURA = 41;
 
     private final Timer gameLoop = new Timer(1000 / 60, this);
     private final Random random = new Random();
     private final ArrayList<Obstaculo> obstaculos = new ArrayList<>();
     private final ArrayList<Cenoura> cenouras = new ArrayList<>();
 
+    private BufferedImage cenarioImage;
+    private BufferedImage coelhoImage;
+    private BufferedImage raposaImage;
+    private BufferedImage cenouraImage;
+    private BufferedImage troncoImage;
+
     private int coelhoY = CHAO_Y - COELHO_ALTURA;
     private double velocidadeY = 0;
     private final double gravidade = 0.85;
     private boolean noChao = true;
-    private boolean gameOver = false;
 
-    private double velocidadeCenario = 4.2;
+    private double raposaX = 16;
+    private boolean gameOver = false;
+    private boolean capturado = false;
+
+    private double velocidadeCenario = 4.8;
     private double pontuacao = 0;
     private int cenourasColetadas = 0;
     private int tempoDesdeSpawn = 0;
-    private int proximoSpawn = 1050;
+    private int proximoSpawn = 1100;
+    private double animacaoPasso = 0;
 
     private static class Obstaculo {
         double x;
-        int y;
-        int largura;
-        int altura;
+        final int y;
+        final int largura;
+        final int altura;
 
         Obstaculo(double x, int y, int largura, int altura) {
             this.x = x;
@@ -45,13 +68,13 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
         }
 
         Rectangle getBounds() {
-            return new Rectangle((int) x + 3, y + 3, largura - 6, altura - 3);
+            return new Rectangle((int) x + 8, y + 8, largura - 16, altura - 12);
         }
     }
 
     private static class Cenoura {
         double x;
-        int y;
+        final int y;
         boolean coletada;
 
         Cenoura(double x, int y) {
@@ -60,7 +83,7 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
         }
 
         Rectangle getBounds() {
-            return new Rectangle((int) x, y, 22, 34);
+            return new Rectangle((int) x + 4, y + 3, CENOURA_LARGURA - 8, CENOURA_ALTURA - 6);
         }
     }
 
@@ -68,7 +91,43 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
         setPreferredSize(new Dimension(LARGURA, ALTURA));
         setFocusable(true);
         addKeyListener(this);
+        carregarAssets();
         gameLoop.start();
+    }
+
+    private void carregarAssets() {
+        cenarioImage = carregarImagem("/assets/cenario.png");
+        coelhoImage = carregarImagem("/assets/conejo.png");
+        raposaImage = carregarImagem("/assets/raposa.png");
+        cenouraImage = carregarImagem("/assets/cenoura.png");
+        troncoImage = carregarImagem("/assets/tronco.png");
+    }
+
+    private BufferedImage carregarImagem(String caminho) {
+        try {
+            URL recurso = getClass().getResource(caminho);
+            if (recurso != null) {
+                return ImageIO.read(recurso);
+            }
+
+            String caminhoSemBarra = caminho.startsWith("/") ? caminho.substring(1) : caminho;
+            File[] alternativas = {
+                new File("src", caminhoSemBarra),
+                new File(caminhoSemBarra),
+                new File(".." + File.separator + caminhoSemBarra)
+            };
+
+            for (File arquivo : alternativas) {
+                if (arquivo.exists()) {
+                    return ImageIO.read(arquivo);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Erro ao carregar " + caminho + ": " + e.getMessage());
+        }
+
+        System.err.println("Imagem não encontrada: " + caminho);
+        return null;
     }
 
     @Override
@@ -76,8 +135,11 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
         desenharCenario(g2);
+        desenharPoeira(g2);
+        desenharRaposa(g2);
         desenharCenouras(g2);
         desenharObstaculos(g2);
         desenharCoelho(g2);
@@ -87,81 +149,71 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
     }
 
     private void desenharCenario(Graphics2D g2) {
-        GradientPaint ceu = new GradientPaint(0, 0, new Color(116, 205, 255), 0, CHAO_Y, new Color(225, 247, 255));
+        if (cenarioImage != null) {
+            g2.drawImage(cenarioImage, 0, 0, LARGURA, ALTURA, null);
+            return;
+        }
+
+        GradientPaint ceu = new GradientPaint(
+                0, 0, new Color(116, 205, 255),
+                0, ALTURA, new Color(225, 247, 255)
+        );
         g2.setPaint(ceu);
-        g2.fillRect(0, 0, LARGURA, CHAO_Y);
-
-        g2.setColor(new Color(255, 246, 170));
-        g2.fillOval(265, 55, 62, 62);
-
-        desenharNuvem(g2, 35, 95);
-        desenharNuvem(g2, 225, 170);
-
-        g2.setColor(new Color(122, 196, 106));
-        g2.fillOval(-75, 390, 260, 210);
-        g2.fillOval(130, 405, 310, 205);
-
+        g2.fillRect(0, 0, LARGURA, ALTURA);
         g2.setColor(new Color(92, 172, 78));
         g2.fillRect(0, CHAO_Y - 8, LARGURA, 16);
-
         g2.setColor(new Color(181, 132, 76));
         g2.fillRect(0, CHAO_Y + 8, LARGURA, ALTURA - CHAO_Y);
+    }
 
-        g2.setColor(new Color(211, 164, 101));
-        for (int x = -20; x < LARGURA; x += 48) {
-            int deslocamento = (int) ((pontuacao * 3) % 48);
-            g2.fillOval(x - deslocamento, CHAO_Y + 34, 28, 8);
+    private void desenharPoeira(Graphics2D g2) {
+        if (gameOver || !noChao) {
+            return;
+        }
+
+        int deslocamento = (int) ((animacaoPasso * 18) % 24);
+        g2.setColor(new Color(255, 244, 211, 125));
+        g2.fillOval(COELHO_X - 12 - deslocamento / 2, CHAO_Y - 16, 18, 9);
+        g2.fillOval((int) raposaX - 5 - deslocamento, CHAO_Y - 13, 14, 7);
+    }
+
+    private void desenharRaposa(Graphics2D g2) {
+        int y = CHAO_Y - RAPOSA_ALTURA;
+        if (!capturado) {
+            y += (int) (Math.sin(animacaoPasso * 1.12) * 3);
+        }
+
+        if (raposaImage != null) {
+            g2.drawImage(raposaImage, (int) raposaX, y, RAPOSA_LARGURA, RAPOSA_ALTURA, null);
+        } else {
+            g2.setColor(new Color(240, 116, 24));
+            g2.fillOval((int) raposaX, y, RAPOSA_LARGURA, RAPOSA_ALTURA);
         }
     }
 
-    private void desenharNuvem(Graphics2D g2, int x, int y) {
-        g2.setColor(new Color(255, 255, 255, 220));
-        g2.fillOval(x, y + 12, 54, 27);
-        g2.fillOval(x + 15, y, 38, 38);
-        g2.fillOval(x + 35, y + 9, 44, 30);
-    }
-
     private void desenharCoelho(Graphics2D g2) {
-        int x = COELHO_X;
         int y = coelhoY;
+        if (noChao && !gameOver) {
+            y += (int) (Math.sin(animacaoPasso) * 3);
+        }
 
-        g2.setColor(new Color(244, 244, 244));
-        g2.fillOval(x + 4, y + 23, 42, 33);
-        g2.fillOval(x + 12, y + 10, 31, 32);
-        g2.fillRoundRect(x + 14, y - 7, 10, 29, 10, 10);
-        g2.fillRoundRect(x + 30, y - 8, 10, 30, 10, 10);
-
-        g2.setColor(new Color(250, 174, 190));
-        g2.fillRoundRect(x + 17, y - 3, 4, 20, 5, 5);
-        g2.fillRoundRect(x + 33, y - 4, 4, 21, 5, 5);
-
-        g2.setColor(Color.WHITE);
-        g2.fillOval(x - 4, y + 31, 18, 18);
-
-        g2.setColor(new Color(45, 45, 45));
-        g2.fillOval(x + 32, y + 19, 5, 6);
-
-        g2.setColor(new Color(239, 132, 150));
-        g2.fillOval(x + 41, y + 26, 6, 5);
-
-        g2.setColor(new Color(215, 215, 215));
-        g2.fillOval(x + 10, y + 48, 18, 9);
-        g2.fillOval(x + 30, y + 48, 18, 9);
+        if (coelhoImage != null) {
+            g2.drawImage(coelhoImage, COELHO_X, y, COELHO_LARGURA, COELHO_ALTURA, null);
+        } else {
+            g2.setColor(Color.WHITE);
+            g2.fillOval(COELHO_X, y, COELHO_LARGURA, COELHO_ALTURA);
+        }
     }
 
     private void desenharObstaculos(Graphics2D g2) {
         for (Obstaculo obstaculo : obstaculos) {
             int x = (int) obstaculo.x;
-            g2.setColor(new Color(117, 73, 40));
-            g2.fillRoundRect(x, obstaculo.y, obstaculo.largura, obstaculo.altura, 10, 10);
-
-            g2.setColor(new Color(157, 103, 57));
-            g2.fillOval(x - 2, obstaculo.y - 3, obstaculo.largura + 4, 12);
-
-            g2.setColor(new Color(88, 56, 34));
-            g2.drawOval(x + 5, obstaculo.y, Math.max(8, obstaculo.largura - 10), 7);
-            g2.drawLine(x + obstaculo.largura / 2, obstaculo.y + 13,
-                    x + obstaculo.largura / 2, obstaculo.y + obstaculo.altura - 5);
+            if (troncoImage != null) {
+                g2.drawImage(troncoImage, x, obstaculo.y, obstaculo.largura, obstaculo.altura, null);
+            } else {
+                g2.setColor(new Color(117, 73, 40));
+                g2.fillRoundRect(x, obstaculo.y, obstaculo.largura, obstaculo.altura, 10, 10);
+            }
         }
     }
 
@@ -172,53 +224,65 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
             }
 
             int x = (int) cenoura.x;
-            int y = cenoura.y;
+            int y = cenoura.y + (int) (Math.sin(animacaoPasso + x * 0.03) * 3);
 
-            g2.setColor(new Color(58, 153, 73));
-            g2.fillOval(x + 4, y - 6, 8, 15);
-            g2.fillOval(x + 11, y - 7, 8, 16);
-
-            Polygon corpo = new Polygon();
-            corpo.addPoint(x, y + 4);
-            corpo.addPoint(x + 22, y + 4);
-            corpo.addPoint(x + 11, y + 34);
-            g2.setColor(new Color(245, 132, 31));
-            g2.fillPolygon(corpo);
-
-            g2.setColor(new Color(212, 96, 20));
-            g2.drawLine(x + 5, y + 13, x + 15, y + 13);
-            g2.drawLine(x + 7, y + 21, x + 14, y + 21);
+            if (cenouraImage != null) {
+                g2.drawImage(cenouraImage, x, y, CENOURA_LARGURA, CENOURA_ALTURA, null);
+            } else {
+                g2.setColor(new Color(245, 132, 31));
+                g2.fillOval(x, y, CENOURA_LARGURA, CENOURA_ALTURA);
+            }
         }
     }
 
     private void desenharInterface(Graphics2D g2) {
-        g2.setFont(new Font("Arial", Font.BOLD, 20));
+        g2.setColor(new Color(255, 255, 255, 205));
+        g2.fillRoundRect(8, 8, 150, 55, 16, 16);
+
         g2.setColor(new Color(40, 69, 50));
-        g2.drawString("Pontos: " + (int) pontuacao, 12, 28);
-        g2.drawString("Cenouras: " + cenourasColetadas, 12, 53);
+        g2.setFont(new Font("Arial", Font.BOLD, 18));
+        g2.drawString("Pontos: " + (int) pontuacao, 17, 31);
+        g2.drawString("Cenouras: " + cenourasColetadas, 17, 54);
 
         if (pontuacao < 2 && !gameOver) {
-            g2.setFont(new Font("Arial", Font.BOLD, 16));
-            g2.drawString("ESPAÇO ou ↑ para pular", 78, 110);
+            g2.setColor(new Color(0, 0, 0, 125));
+            g2.fillRoundRect(66, 86, 228, 37, 18, 18);
+            g2.setColor(Color.WHITE);
+            g2.setFont(new Font("Arial", Font.BOLD, 14));
+            g2.drawString("ESPAÇO ou ↑ para pular", 88, 110);
         }
 
-        if (gameOver) {
-            g2.setColor(new Color(0, 0, 0, 150));
-            g2.fillRoundRect(35, 205, 290, 170, 22, 22);
+        if (gameOver && !capturado) {
+            g2.setColor(new Color(0, 0, 0, 135));
+            g2.fillRoundRect(55, 190, 250, 54, 18, 18);
+            g2.setColor(Color.WHITE);
+            g2.setFont(new Font("Arial", Font.BOLD, 17));
+            g2.drawString("A raposa está chegando!", 76, 224);
+        }
+
+        if (capturado) {
+            g2.setColor(new Color(0, 0, 0, 165));
+            g2.fillRoundRect(28, 183, 304, 202, 24, 24);
 
             g2.setColor(Color.WHITE);
-            g2.setFont(new Font("Arial", Font.BOLD, 31));
-            g2.drawString("FIM DE JOGO", 73, 255);
-            g2.setFont(new Font("Arial", Font.BOLD, 18));
-            g2.drawString("Pontuação: " + (int) pontuacao, 108, 294);
-            g2.drawString("Cenouras: " + cenourasColetadas, 108, 322);
-            g2.setFont(new Font("Arial", Font.PLAIN, 15));
-            g2.drawString("Pressione ESPAÇO para reiniciar", 64, 354);
+            g2.setFont(new Font("Arial", Font.BOLD, 28));
+            g2.drawString("FIM DE JOGO", 78, 230);
+
+            g2.setFont(new Font("Arial", Font.BOLD, 17));
+            g2.drawString("A raposa alcançou o conejo!", 55, 270);
+            g2.drawString("Pontuação: " + (int) pontuacao, 105, 306);
+            g2.drawString("Cenouras: " + cenourasColetadas, 105, 333);
+
+            g2.setFont(new Font("Arial", Font.PLAIN, 14));
+            g2.drawString("Pressione ESPAÇO para reiniciar", 72, 365);
         }
     }
 
     private void atualizarJogo() {
+        animacaoPasso += 0.22;
+
         if (gameOver) {
+            atualizarCapturaDaRaposa();
             return;
         }
 
@@ -234,21 +298,23 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
             noChao = false;
         }
 
-        velocidadeCenario = Math.min(9.2, 4.2 + pontuacao / 180.0);
+        velocidadeCenario = Math.min(10.0, 4.8 + pontuacao / 190.0);
         pontuacao += velocidadeCenario / 70.0;
+
+        raposaX = 16 + Math.sin(animacaoPasso * 0.45) * 3;
 
         tempoDesdeSpawn += 1000 / 60;
         if (tempoDesdeSpawn >= proximoSpawn) {
             criarElementos();
             tempoDesdeSpawn = 0;
-            proximoSpawn = 900 + random.nextInt(650);
+            proximoSpawn = 950 + random.nextInt(550);
         }
 
         Rectangle areaCoelho = new Rectangle(
-                COELHO_X + 7,
-                coelhoY + 9,
-                COELHO_LARGURA - 14,
-                COELHO_ALTURA - 12
+                COELHO_X + 17,
+                coelhoY + 12,
+                COELHO_LARGURA - 31,
+                COELHO_ALTURA - 19
         );
 
         Iterator<Obstaculo> itObstaculos = obstaculos.iterator();
@@ -257,7 +323,7 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
             obstaculo.x -= velocidadeCenario;
 
             if (areaCoelho.intersects(obstaculo.getBounds())) {
-                gameOver = true;
+                iniciarCaptura();
             }
 
             if (obstaculo.x + obstaculo.largura < 0) {
@@ -276,30 +342,53 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
                 pontuacao += 10;
             }
 
-            if (cenoura.x + 25 < 0 || cenoura.coletada) {
+            if (cenoura.x + CENOURA_LARGURA < 0 || cenoura.coletada) {
                 itCenouras.remove();
             }
         }
     }
 
-    private void criarElementos() {
-        int altura = 30 + random.nextInt(28);
-        int largura = 28 + random.nextInt(20);
-        obstaculos.add(new Obstaculo(LARGURA + 15, CHAO_Y - altura, largura, altura));
+    private void atualizarCapturaDaRaposa() {
+        if (capturado) {
+            return;
+        }
 
-        if (random.nextDouble() < 0.65) {
-            int alturaCenoura = CHAO_Y - altura - 65 - random.nextInt(45);
-            cenouras.add(new Cenoura(LARGURA + 25, Math.max(210, alturaCenoura)));
+        raposaX += 4.6;
+        if (raposaX + RAPOSA_LARGURA >= COELHO_X + 27) {
+            raposaX = COELHO_X + 27 - RAPOSA_LARGURA;
+            capturado = true;
+        }
+    }
+
+    private void iniciarCaptura() {
+        if (!gameOver) {
+            gameOver = true;
+            velocidadeY = 0;
+        }
+    }
+
+    private void criarElementos() {
+        int alturaTronco = TRONCO_ALTURA + random.nextInt(7);
+        obstaculos.add(new Obstaculo(
+                LARGURA + 15,
+                CHAO_Y - alturaTronco + 6,
+                TRONCO_LARGURA,
+                alturaTronco
+        ));
+
+        if (random.nextDouble() < 0.78) {
+            int yCenoura = CHAO_Y - alturaTronco - 52 - random.nextInt(32);
+            cenouras.add(new Cenoura(LARGURA + 44, Math.max(210, yCenoura)));
         }
     }
 
     private void pular() {
-        if (gameOver) {
+        if (capturado) {
             reiniciar();
             return;
         }
 
-        if (noChao) {
+        if (!gameOver && noChao) {
             velocidadeY = -14.5;
             noChao = false;
         }
@@ -311,12 +400,15 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
         coelhoY = CHAO_Y - COELHO_ALTURA;
         velocidadeY = 0;
         noChao = true;
+        raposaX = 16;
         gameOver = false;
-        velocidadeCenario = 4.2;
+        capturado = false;
+        velocidadeCenario = 4.8;
         pontuacao = 0;
         cenourasColetadas = 0;
         tempoDesdeSpawn = 0;
-        proximoSpawn = 1050;
+        proximoSpawn = 1100;
+        animacaoPasso = 0;
     }
 
     @Override

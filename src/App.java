@@ -4,7 +4,7 @@ import javax.swing.SwingUtilities;
 public class App {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            JFrame janela = new JFrame("Conejo Run");
+            JFrame janela = new JFrame("Conejo Run: Fuga da Raposa");
             ConejoGame jogo = new ConejoGame();
 
             janela.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
