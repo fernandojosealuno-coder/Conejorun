@@ -1,9 +1,14 @@
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Iterator;
 import java.util.Random;
 import javax.imageio.ImageIO;
@@ -122,12 +127,72 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
                     return ImageIO.read(arquivo);
                 }
             }
+
+            BufferedImage imagemCodificada = carregarImagemCodificada(caminhoSemBarra);
+            if (imagemCodificada != null) {
+                return imagemCodificada;
+            }
         } catch (Exception e) {
             System.err.println("Erro ao carregar " + caminho + ": " + e.getMessage());
         }
 
         System.err.println("Imagem não encontrada: " + caminho);
         return null;
+    }
+
+    private BufferedImage carregarImagemCodificada(String caminhoSemBarra) throws Exception {
+        int ponto = caminhoSemBarra.lastIndexOf('.');
+        String caminhoBase = ponto >= 0 ? caminhoSemBarra.substring(0, ponto) : caminhoSemBarra;
+
+        String textoBase64 = lerTextoAsset("/" + caminhoBase + ".b64");
+        byte[] dados;
+
+        if (textoBase64 != null) {
+            dados = Base64.getDecoder().decode(textoBase64.replaceAll("\\s", ""));
+        } else {
+            String textoHex = lerTextoAsset("/" + caminhoBase + ".hex");
+            if (textoHex == null) {
+                return null;
+            }
+            dados = converterHexParaBytes(textoHex.replaceAll("\\s", ""));
+        }
+
+        return ImageIO.read(new ByteArrayInputStream(dados));
+    }
+
+    private String lerTextoAsset(String caminho) throws Exception {
+        try (InputStream entrada = getClass().getResourceAsStream(caminho)) {
+            if (entrada != null) {
+                return new String(entrada.readAllBytes(), StandardCharsets.UTF_8);
+            }
+        }
+
+        String caminhoSemBarra = caminho.startsWith("/") ? caminho.substring(1) : caminho;
+        File[] alternativas = {
+            new File("src", caminhoSemBarra),
+            new File(caminhoSemBarra),
+            new File(".." + File.separator + caminhoSemBarra)
+        };
+
+        for (File arquivo : alternativas) {
+            if (arquivo.exists()) {
+                return Files.readString(arquivo.toPath(), StandardCharsets.UTF_8);
+            }
+        }
+
+        return null;
+    }
+
+    private byte[] converterHexParaBytes(String hexadecimal) {
+        if (hexadecimal.length() % 2 != 0) {
+            throw new IllegalArgumentException("Arquivo hexadecimal inválido.");
+        }
+
+        byte[] dados = new byte[hexadecimal.length() / 2];
+        for (int i = 0; i < hexadecimal.length(); i += 2) {
+            dados[i / 2] = (byte) Integer.parseInt(hexadecimal.substring(i, i + 2), 16);
+        }
+        return dados;
     }
 
     @Override

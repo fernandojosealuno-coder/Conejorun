@@ -1,0 +1,1 @@
+As imagens PNG reais serão adicionadas por commit de baixo nível.
