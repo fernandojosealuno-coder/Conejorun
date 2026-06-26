@@ -109,34 +109,51 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
     }
 
     private BufferedImage carregarImagem(String caminho) {
+        String caminhoSemBarra = caminho.startsWith("/") ? caminho.substring(1) : caminho;
+
         try {
             URL recurso = getClass().getResource(caminho);
             if (recurso != null) {
-                return ImageIO.read(recurso);
-            }
-
-            String caminhoSemBarra = caminho.startsWith("/") ? caminho.substring(1) : caminho;
-            File[] alternativas = {
-                new File("src", caminhoSemBarra),
-                new File(caminhoSemBarra),
-                new File(".." + File.separator + caminhoSemBarra)
-            };
-
-            for (File arquivo : alternativas) {
-                if (arquivo.exists()) {
-                    return ImageIO.read(arquivo);
+                BufferedImage imagem = ImageIO.read(recurso);
+                if (imagem != null) {
+                    return imagem;
                 }
             }
+        } catch (Exception e) {
+            System.err.println("Recurso invalido " + caminho + ": " + e.getMessage());
+        }
 
+        File[] alternativas = {
+            new File("src", caminhoSemBarra),
+            new File(caminhoSemBarra),
+            new File(".." + File.separator + caminhoSemBarra)
+        };
+
+        for (File arquivo : alternativas) {
+            if (!arquivo.exists()) {
+                continue;
+            }
+
+            try {
+                BufferedImage imagem = ImageIO.read(arquivo);
+                if (imagem != null) {
+                    return imagem;
+                }
+            } catch (Exception e) {
+                System.err.println("Arquivo de imagem invalido " + arquivo + ": " + e.getMessage());
+            }
+        }
+
+        try {
             BufferedImage imagemCodificada = carregarImagemCodificada(caminhoSemBarra);
             if (imagemCodificada != null) {
                 return imagemCodificada;
             }
         } catch (Exception e) {
-            System.err.println("Erro ao carregar " + caminho + ": " + e.getMessage());
+            System.err.println("Erro ao reconstruir " + caminho + ": " + e.getMessage());
         }
 
-        System.err.println("Imagem não encontrada: " + caminho);
+        System.err.println("Imagem nao encontrada: " + caminho);
         return null;
     }
 
@@ -185,7 +202,7 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
 
     private byte[] converterHexParaBytes(String hexadecimal) {
         if (hexadecimal.length() % 2 != 0) {
-            throw new IllegalArgumentException("Arquivo hexadecimal inválido.");
+            throw new IllegalArgumentException("Arquivo hexadecimal invalido.");
         }
 
         byte[] dados = new byte[hexadecimal.length() / 2];
@@ -314,7 +331,7 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
             g2.fillRoundRect(66, 86, 228, 37, 18, 18);
             g2.setColor(Color.WHITE);
             g2.setFont(new Font("Arial", Font.BOLD, 14));
-            g2.drawString("ESPAÇO ou ↑ para pular", 88, 110);
+            g2.drawString("ESPA\u00c7O ou \u2191 para pular", 88, 110);
         }
 
         if (gameOver && !capturado) {
@@ -322,7 +339,7 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
             g2.fillRoundRect(55, 190, 250, 54, 18, 18);
             g2.setColor(Color.WHITE);
             g2.setFont(new Font("Arial", Font.BOLD, 17));
-            g2.drawString("A raposa está chegando!", 76, 224);
+            g2.drawString("A raposa est\u00e1 chegando!", 76, 224);
         }
 
         if (capturado) {
@@ -334,12 +351,12 @@ public class ConejoGame extends JPanel implements ActionListener, KeyListener {
             g2.drawString("FIM DE JOGO", 78, 230);
 
             g2.setFont(new Font("Arial", Font.BOLD, 17));
-            g2.drawString("A raposa alcançou o conejo!", 55, 270);
-            g2.drawString("Pontuação: " + (int) pontuacao, 105, 306);
+            g2.drawString("A raposa alcan\u00e7ou o conejo!", 55, 270);
+            g2.drawString("Pontua\u00e7\u00e3o: " + (int) pontuacao, 105, 306);
             g2.drawString("Cenouras: " + cenourasColetadas, 105, 333);
 
             g2.setFont(new Font("Arial", Font.PLAIN, 14));
-            g2.drawString("Pressione ESPAÇO para reiniciar", 72, 365);
+            g2.drawString("Pressione ESPA\u00c7O para reiniciar", 72, 365);
         }
     }
 
